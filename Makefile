@@ -10,7 +10,7 @@ help:
 	@echo ""
 	@echo "Operations:"
 	@echo "  status         - kubectl get nodes for the worker label"
-	@echo "  cordon-drain   - cordon + drain all workers (best-effort, honors PDBs)"
+	@echo "  cordon-drain   - cordon + drain all workers (force mode, bypasses PDBs)"
 	@echo "  uncordon       - uncordon all workers"
 	@echo ""
 	@echo "Override worker label / drain options via group_vars/all.yml or:"

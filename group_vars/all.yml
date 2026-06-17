@@ -14,15 +14,30 @@ kubectl_bin: "kubectl"
 # For ad-hoc overrides from the shell:
 #   KUBECONFIG=/path/to/config make status
 
-# Drain options. Defaults honor PodDisruptionBudgets (so Longhorn replicas
-# can migrate cleanly) and cap each node at 5 minutes — if a PDB blocks
-# longer than that, we log the failure and move on (cordon is already
-# applied, so nothing new schedules anyway).
+# Drain options for a NAS-shutdown scenario: the NFS export is going away
+# regardless, so we want EVERY worker actually empty before halt — not
+# "best-effort with PDB-aware skip".
+#
+# --disable-eviction switches kubectl to the DELETE API instead of the
+# EVICTION API, bypassing PodDisruptionBudgets entirely. We learned the
+# hard way that Longhorn's instance-manager PDBs (MAX_UNAVAILABLE=0)
+# block eviction of every Longhorn pod when more than one node drains,
+# so PDB-aware drain just times out and leaves pods running.
+#
+# --grace-period=60 still gives apps a minute to finish in-flight writes
+# (so e.g. databases get to fsync) before they're killed — much safer
+# than --grace-period=0, which is effectively SIGKILL.
+#
+# --timeout=120s caps each node at 2 minutes. With 7 workers sequential
+# the worst case is ~14 minutes, comfortably under the systemd unit's
+# TimeoutStopSec=900 (15 min).
 drain_args:
   - "--ignore-daemonsets"
   - "--delete-emptydir-data"
   - "--force"
-  - "--timeout=300s"
+  - "--disable-eviction"
+  - "--grace-period=60"
+  - "--timeout=120s"
 
 # How long to wait for the Kubernetes API to be reachable on startup
 # (uncordon path) — useful when the NAS boots before the cluster API

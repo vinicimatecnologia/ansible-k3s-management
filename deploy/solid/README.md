@@ -80,10 +80,16 @@ Follow logs with `journalctl -u k3s-lifecycle.service -f`.
 - Default ordering puts this unit `Before=shutdown.target` and ordered
   against `network.target`, so cordon+drain runs while the network is
   still up — kubectl on the NAS can reach the API server on the masters.
-- Per-node drain is capped at 5 minutes (`--timeout=300s` in the
-  playbook), then we log and move on. Whole-unit cap is 15 minutes
-  (`TimeoutStopSec=900`) — past that systemd kills the wrapper and the
-  shutdown continues.
+- Per-node drain is capped at 2 minutes (`--timeout=120s` in
+  `group_vars/all.yml`), then we log and move on. Whole-unit cap is
+  15 minutes (`TimeoutStopSec=900`) — past that systemd kills the
+  wrapper and the shutdown continues even if some pods are still
+  terminating.
+- Drain runs in force mode (`--disable-eviction --grace-period=60`)
+  — bypasses PodDisruptionBudgets, gives each pod 60s to terminate
+  cleanly. Required because Longhorn's instance-manager PDBs
+  (`MAX_UNAVAILABLE=0`) deadlock PDB-aware drain across multiple
+  workers.
 
 ## Disable
 
@@ -99,9 +105,10 @@ systemctl daemon-reload
 - API not reachable from solid: check `kubectl get nodes` works as root.
   The kubeconfig server address must NOT be `127.0.0.1` (the loopback of
   a master); rewrite it to that master's reachable LAN IP.
-- Drain stuck on a node: usually a PodDisruptionBudget (Longhorn,
-  SigNoz). The per-node `--timeout=300s` will fire and the play moves on
-  with a failure logged — that's intentional, not a bug.
+- Drain stuck on a node: shouldn't happen in force mode (PDBs bypassed),
+  but if it does the per-node `--timeout=120s` will fire and the play
+  moves on with a failure logged. Likely cause: a finalizer or terminating
+  pod that ignores SIGTERM.
 - Want to skip a specific worker? Override the label selector for one
   run:
   ```bash

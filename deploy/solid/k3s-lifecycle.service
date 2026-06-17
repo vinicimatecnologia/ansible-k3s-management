@@ -34,10 +34,9 @@ ExecStop=/opt/ansible-k3s-management/deploy/solid/wrap.sh cordon-drain
 # Uncordon is fast (seconds), but the API may not respond immediately at
 # boot — give it 10 minutes worst case.
 TimeoutStartSec=600
-# Drain may legitimately take a while when PDBs are tight (Longhorn
-# replicas migrating, etc.). Each node has a 5-minute per-drain timeout
-# inside the play, then we move on — so 15 minutes total is generous
-# without making the host halt unboundedly slow.
+# 7 workers × 2-minute per-drain timeout (--timeout=120s in the play) =
+# ~14 minutes worst case. 15 minutes covers it with a little slack;
+# beyond that systemd kills the wrapper and the shutdown continues.
 TimeoutStopSec=900
 StandardOutput=journal
 StandardError=journal

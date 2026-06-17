@@ -10,8 +10,15 @@ Solid NAS shuts down (cordon + drain) and bring them back when it boots
 
 Most workloads on this cluster mount NFS from the Solid NAS (and use
 Longhorn replicas hosted on the workers themselves). When Solid halts,
-NFS disappears and pods crash. Draining first lets pods stop cleanly and
-gives Longhorn time to rebalance replicas.
+NFS disappears and pods crash. Draining first lets pods stop cleanly
+(SIGTERM + 60s grace) instead of being killed mid-write by NFS loss.
+
+Drain runs in **force mode** (`--disable-eviction`) because Longhorn's
+`instance-manager-*` PDBs with `MAX_UNAVAILABLE=0` block PDB-aware
+eviction on every Longhorn pod when more than one worker drains — the
+play would just time out and leave everything running. For a NAS
+shutdown we want every worker empty, so we use the DELETE API and
+accept that we're bypassing the disruption budget.
 
 We only touch **worker** nodes (label `node-role.kubernetes.io/worker`).
 Control-plane / etcd / master nodes are left alone.
@@ -20,7 +27,7 @@ Control-plane / etcd / master nodes are left alone.
 
 | file | purpose |
 |---|---|
-| `cordon-drain.yml` | best-effort: cordon all workers, then drain (honors PDBs, capped at 5 min/node) |
+| `cordon-drain.yml` | cordon all workers, then drain in force mode — bypasses PDBs, 60s graceful termination per pod, capped at 2 min/node |
 | `uncordon.yml` | uncordon all workers; waits up to 5 min for the API on boot |
 | `status.yml` | `kubectl get nodes -l <worker-label> -o wide` |
 | `group_vars/all.yml` | label selector, kubeconfig path, drain flags, API-wait knobs |
