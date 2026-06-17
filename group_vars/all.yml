@@ -1,0 +1,30 @@
+---
+# Label selector used to pick the workers we manage. Skips anything else
+# (control-plane, etcd, etc.). The k3s/k8s convention is the
+# `node-role.kubernetes.io/worker` label, applied with no value — so we
+# select on label *existence*, not on value=true (that would not match).
+worker_label: "node-role.kubernetes.io/worker"
+
+# kubectl binary path. Override if installed somewhere unusual.
+kubectl_bin: "kubectl"
+
+# kubeconfig path. Empty = let kubectl use $KUBECONFIG / ~/.kube/config.
+# Set to e.g. /etc/rancher/k3s/k3s.yaml when running on a master.
+kubeconfig: ""
+
+# Drain options. Defaults honor PodDisruptionBudgets (so Longhorn replicas
+# can migrate cleanly) and cap each node at 5 minutes — if a PDB blocks
+# longer than that, we log the failure and move on (cordon is already
+# applied, so nothing new schedules anyway).
+drain_args:
+  - "--ignore-daemonsets"
+  - "--delete-emptydir-data"
+  - "--force"
+  - "--timeout=300s"
+
+# How long to wait for the Kubernetes API to be reachable on startup
+# (uncordon path) — useful when the NAS boots before the cluster API
+# answers. cordon-drain uses a shorter wait since API must be up.
+api_wait_retries_start: 60   # 60 * 5s = 5 min
+api_wait_retries_stop: 12    # 12 * 5s = 1 min
+api_wait_delay: 5

@@ -1,0 +1,9 @@
+---
+# Worker nodes are discovered dynamically via kubectl in each playbook.
+# This inventory only needs localhost — all kubectl calls run wherever
+# Ansible is being executed (the dev machine, or solid via systemd).
+
+all:
+  hosts:
+    localhost:
+      ansible_connection: local

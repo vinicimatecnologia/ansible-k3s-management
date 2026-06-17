@@ -1,0 +1,84 @@
+---
+# Cordon + drain all k3s worker nodes (best-effort).
+#
+# Use this BEFORE a planned NAS shutdown so workloads using NFS/Longhorn
+# from the NAS can stop gracefully instead of crashing when storage
+# disappears. Counterpart: uncordon.yml.
+#
+# Sequence:
+#   1) Wait for the Kubernetes API to be reachable
+#   2) Discover workers via kubectl (label node-role.kubernetes.io/worker)
+#   3) Cordon every worker (fast, prevents new scheduling)
+#   4) Drain every worker (slow, honors PDBs, capped per-node by --timeout)
+#   5) Summarize successes / failures — does NOT fail the play if drain
+#      hits the timeout, because at that point cordon is already in place
+#      and the host going down will end any leftover pods anyway
+
+- name: Cordon + drain k3s workers (best-effort)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    kubectl_env:
+      KUBECONFIG: "{{ kubeconfig }}"
+
+  tasks:
+    - name: "preflight | Wait for Kubernetes API"
+      ansible.builtin.command: "{{ kubectl_bin }} --request-timeout=5s cluster-info"
+      environment: "{{ kubectl_env if kubeconfig else omit }}"
+      register: api
+      retries: "{{ api_wait_retries_stop }}"
+      delay: "{{ api_wait_delay }}"
+      until: api.rc == 0
+      changed_when: false
+
+    - name: "discover | List worker nodes"
+      ansible.builtin.command: >-
+        {{ kubectl_bin }} get nodes
+        -l {{ worker_label }}
+        -o jsonpath={.items[*].metadata.name}
+      environment: "{{ kubectl_env if kubeconfig else omit }}"
+      register: workers_raw
+      changed_when: false
+
+    - name: "discover | Build workers list"
+      ansible.builtin.set_fact:
+        workers: "{{ workers_raw.stdout.split() }}"
+
+    - name: "discover | Show workers"
+      ansible.builtin.debug:
+        msg: "Found {{ workers | length }} worker(s): {{ workers | join(', ') }}"
+
+    - name: "drain | FAIL if no workers were discovered"
+      ansible.builtin.fail:
+        msg: |
+          No workers matched label `{{ worker_label }}`. Refusing to proceed
+          — either the API returned nothing or the label is wrong.
+      when: workers | length == 0
+
+    - name: "cordon | Cordon all workers"
+      ansible.builtin.command: "{{ kubectl_bin }} cordon {{ item }}"
+      environment: "{{ kubectl_env if kubeconfig else omit }}"
+      loop: "{{ workers }}"
+      register: cordon_results
+      changed_when: "'already cordoned' not in (cordon_results.stdout | default(''))"
+
+    - name: "drain | Drain each worker (best-effort, PDB-aware)"
+      ansible.builtin.command: >-
+        {{ kubectl_bin }} drain {{ item }} {{ drain_args | join(' ') }}
+      environment: "{{ kubectl_env if kubeconfig else omit }}"
+      loop: "{{ workers }}"
+      register: drain_results
+      changed_when: drain_results.rc == 0
+      failed_when: false
+
+    - name: "drain | Summary"
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}:
+          {{ 'drained OK' if item.rc == 0
+             else 'FAILED rc=' ~ item.rc ~ ' — ' ~ (item.stderr | default('') | truncate(200, true)) }}
+      loop: "{{ drain_results.results }}"
+      loop_control:
+        label: "{{ item.item }}"

@@ -1,0 +1,33 @@
+[Unit]
+Description=k3s worker lifecycle (uncordon on boot, cordon+drain on shutdown)
+Documentation=https://github.com/marcosviniciusi/ansible-k3s-management
+
+# We only need a working network — the Kubernetes API lives on cole/tess/yuna,
+# not on this NAS, and kubectl uses its own request timeouts. Workers will
+# still be reachable to the API server during shutdown until network goes down.
+After=network-online.target
+Wants=network-online.target
+
+# DefaultDependencies=yes (the default) puts us Before=shutdown.target, so
+# ExecStop runs BEFORE the network is torn down — kubectl can reach the
+# API server on the masters during the cordon+drain.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/ansible-k3s-management
+ExecStart=/opt/ansible-k3s-management/deploy/solid/wrap.sh uncordon
+ExecStop=/opt/ansible-k3s-management/deploy/solid/wrap.sh cordon-drain
+# Uncordon is fast (seconds), but the API may not respond immediately at
+# boot — give it 10 minutes worst case.
+TimeoutStartSec=600
+# Drain may legitimately take a while when PDBs are tight (Longhorn
+# replicas migrating, etc.). Each node has a 5-minute per-drain timeout
+# inside the play, then we move on — so 15 minutes total is generous
+# without making the host halt unboundedly slow.
+TimeoutStopSec=900
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

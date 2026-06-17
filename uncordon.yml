@@ -1,0 +1,52 @@
+---
+# Uncordon all k3s worker nodes.
+#
+# Counterpart to cordon-drain.yml. Run on boot to allow scheduling again.
+# Idempotent: nodes that aren't cordoned just print "already uncordoned".
+
+- name: Uncordon k3s workers
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    kubectl_env:
+      KUBECONFIG: "{{ kubeconfig }}"
+
+  tasks:
+    - name: "preflight | Wait for Kubernetes API (longer wait — may be boot-time)"
+      ansible.builtin.command: "{{ kubectl_bin }} --request-timeout=5s cluster-info"
+      environment: "{{ kubectl_env if kubeconfig else omit }}"
+      register: api
+      retries: "{{ api_wait_retries_start }}"
+      delay: "{{ api_wait_delay }}"
+      until: api.rc == 0
+      changed_when: false
+
+    - name: "discover | List worker nodes"
+      ansible.builtin.command: >-
+        {{ kubectl_bin }} get nodes
+        -l {{ worker_label }}
+        -o jsonpath={.items[*].metadata.name}
+      environment: "{{ kubectl_env if kubeconfig else omit }}"
+      register: workers_raw
+      changed_when: false
+
+    - name: "discover | Build workers list"
+      ansible.builtin.set_fact:
+        workers: "{{ workers_raw.stdout.split() }}"
+
+    - name: "discover | Show workers"
+      ansible.builtin.debug:
+        msg: "Found {{ workers | length }} worker(s): {{ workers | join(', ') }}"
+
+    - name: "uncordon | Uncordon each worker"
+      ansible.builtin.command: "{{ kubectl_bin }} uncordon {{ item }}"
+      environment: "{{ kubectl_env if kubeconfig else omit }}"
+      loop: "{{ workers }}"
+      register: uncordon_results
+      changed_when: "'already uncordoned' not in (uncordon_results.stdout | default(''))"
+
+    - name: "uncordon | Summary"
+      ansible.builtin.debug:
+        msg: "{{ workers | length }} worker(s) uncordoned: {{ workers | join(', ') }}"

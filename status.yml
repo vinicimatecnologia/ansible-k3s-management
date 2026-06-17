@@ -1,0 +1,25 @@
+---
+# Print the current state of every worker node — schedulable or not.
+
+- name: Show k3s worker status
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    kubectl_env:
+      KUBECONFIG: "{{ kubeconfig }}"
+
+  tasks:
+    - name: "status | kubectl get nodes -l {{ worker_label }}"
+      ansible.builtin.command: >-
+        {{ kubectl_bin }} get nodes
+        -l {{ worker_label }}
+        -o wide
+      environment: "{{ kubectl_env if kubeconfig else omit }}"
+      register: status
+      changed_when: false
+
+    - name: "status | Output"
+      ansible.builtin.debug:
+        msg: "{{ status.stdout_lines }}"
