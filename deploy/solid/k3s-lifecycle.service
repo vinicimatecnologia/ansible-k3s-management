@@ -1,6 +1,6 @@
 [Unit]
 Description=k3s worker lifecycle (uncordon on boot, cordon+drain on shutdown)
-Documentation=https://github.com/marcosviniciusi/ansible-k3s-management
+Documentation=https://github.com/vinicimatecnologia/ansible-k3s-management
 
 # We only need a working network — the Kubernetes API lives on cole/tess/yuna,
 # not on this NAS, and kubectl uses its own request timeouts. Workers will
