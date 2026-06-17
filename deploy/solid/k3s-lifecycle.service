@@ -5,7 +5,15 @@ Documentation=https://github.com/marcosviniciusi/ansible-k3s-management
 # We only need a working network — the Kubernetes API lives on cole/tess/yuna,
 # not on this NAS, and kubectl uses its own request timeouts. Workers will
 # still be reachable to the API server during shutdown until network goes down.
-After=network-online.target
+# Ordering vs the NFS server: by systemd's symmetric semantics,
+# `After=nfs-server.service` means "this unit STARTS after NFS exports
+# are ready AND this unit STOPS BEFORE NFS is torn down". Without this,
+# nfs-server (seconds) would race cordon-drain (minutes) on shutdown and
+# the NFS exports could disappear mid-drain — pods on the workers that
+# still need to flush state to NFS would crash instead of stopping
+# cleanly. nfs-kernel-server.service is the Debian alias; listing both
+# is safe (systemd silently ignores unknown units in After=).
+After=network-online.target nfs-server.service nfs-kernel-server.service
 Wants=network-online.target
 
 # DefaultDependencies=yes (the default) puts us Before=shutdown.target, so
