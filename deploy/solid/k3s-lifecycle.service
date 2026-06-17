@@ -16,6 +16,11 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/ansible-k3s-management
+# systemd does not set HOME for service processes, so kubectl can't find
+# ~/.kube/config — point it at the file explicitly. (HOME=/root is also
+# set so anything else that wants ~ resolves correctly.)
+Environment=KUBECONFIG=/root/.kube/config
+Environment=HOME=/root
 ExecStart=/opt/ansible-k3s-management/deploy/solid/wrap.sh uncordon
 ExecStop=/opt/ansible-k3s-management/deploy/solid/wrap.sh cordon-drain
 # Uncordon is fast (seconds), but the API may not respond immediately at

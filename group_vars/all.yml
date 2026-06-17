@@ -8,9 +8,11 @@ worker_label: "node-role.kubernetes.io/worker"
 # kubectl binary path. Override if installed somewhere unusual.
 kubectl_bin: "kubectl"
 
-# kubeconfig path. Empty = let kubectl use $KUBECONFIG / ~/.kube/config.
-# Set to e.g. /etc/rancher/k3s/k3s.yaml when running on a master.
-kubeconfig: ""
+# kubeconfig: kubectl uses $KUBECONFIG / ~/.kube/config as usual. Under
+# systemd, $HOME may not be set — the unit file in deploy/solid/ exports
+# Environment=KUBECONFIG=/root/.kube/config explicitly for that case.
+# For ad-hoc overrides from the shell:
+#   KUBECONFIG=/path/to/config make status
 
 # Drain options. Defaults honor PodDisruptionBudgets (so Longhorn replicas
 # can migrate cleanly) and cap each node at 5 minutes — if a PDB blocks

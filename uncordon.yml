@@ -9,14 +9,9 @@
   connection: local
   gather_facts: false
 
-  vars:
-    kubectl_env:
-      KUBECONFIG: "{{ kubeconfig }}"
-
   tasks:
     - name: "preflight | Wait for Kubernetes API (longer wait — may be boot-time)"
       ansible.builtin.command: "{{ kubectl_bin }} --request-timeout=5s cluster-info"
-      environment: "{{ kubectl_env if kubeconfig else omit }}"
       register: api
       retries: "{{ api_wait_retries_start }}"
       delay: "{{ api_wait_delay }}"
@@ -28,7 +23,6 @@
         {{ kubectl_bin }} get nodes
         -l {{ worker_label }}
         -o jsonpath={.items[*].metadata.name}
-      environment: "{{ kubectl_env if kubeconfig else omit }}"
       register: workers_raw
       changed_when: false
 
@@ -42,7 +36,6 @@
 
     - name: "uncordon | Uncordon each worker"
       ansible.builtin.command: "{{ kubectl_bin }} uncordon {{ item }}"
-      environment: "{{ kubectl_env if kubeconfig else omit }}"
       loop: "{{ workers }}"
       register: uncordon_results
       changed_when: "'already uncordoned' not in (uncordon_results.stdout | default(''))"

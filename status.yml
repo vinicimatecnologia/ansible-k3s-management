@@ -6,17 +6,12 @@
   connection: local
   gather_facts: false
 
-  vars:
-    kubectl_env:
-      KUBECONFIG: "{{ kubeconfig }}"
-
   tasks:
     - name: "status | kubectl get nodes -l {{ worker_label }}"
       ansible.builtin.command: >-
         {{ kubectl_bin }} get nodes
         -l {{ worker_label }}
         -o wide
-      environment: "{{ kubectl_env if kubeconfig else omit }}"
       register: status
       changed_when: false
 
